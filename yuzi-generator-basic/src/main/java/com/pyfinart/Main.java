@@ -1,7 +1,16 @@
 package com.pyfinart;
 
+import com.pyfinart.cli.CommandExecutor;
+
 public class Main {
     public static void main(String[] args) {
-        System.out.println("Hello world!");
+
+//        args = new String[]{"generate", "-l", "-a", "-o"};
+//        args = new String[] {"generate", "-a", "-o"};
+//        args = new String[]{"config"};
+//        args = new String[]{"list"};
+
+        CommandExecutor commandExecutor = new CommandExecutor();
+        commandExecutor.doExecute(args);
     }
 }

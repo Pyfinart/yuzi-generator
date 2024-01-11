@@ -1,0 +1,3 @@
+#!/bin/bash
+java -jar ./target/yuzi-generator-basic-1.0-SNAPSHOT-jar-with-dependencies.jar "$@"
+# "$@" 会拼接我们执行脚本时所输入的参数

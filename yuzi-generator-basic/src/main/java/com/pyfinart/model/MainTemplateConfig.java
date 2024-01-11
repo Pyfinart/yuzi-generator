@@ -1,6 +1,7 @@
 package com.pyfinart.model;
 
 import lombok.Data;
+import picocli.CommandLine;
 
 
 /**

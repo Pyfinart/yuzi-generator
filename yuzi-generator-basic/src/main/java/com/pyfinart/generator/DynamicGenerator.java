@@ -36,28 +36,29 @@ public class DynamicGenerator {
      * @throws TemplateException
      */
     public static void doGenerate(String inputPath, String outputPath, Object model) throws IOException, TemplateException {
-        // new 出 Configuration 对象，参数为 FreeMarker 版本号
-        Configuration configuration = new Configuration(Configuration.VERSION_2_3_32);
 
-        File templateDir = new File(inputPath).getParentFile(); // 将模板所在目录作为模板目录
+        try(Writer out = new FileWriter(outputPath)) { // 自动关闭资源
 
-        // 指定模板文件所在的路径
-        configuration.setDirectoryForTemplateLoading(templateDir);
+            // new 出 Configuration 对象，参数为 FreeMarker 版本号
+            Configuration configuration = new Configuration(Configuration.VERSION_2_3_32);
 
-        // 设置模板文件使用的字符集
-        configuration.setDefaultEncoding("utf-8");
+            File templateDir = new File(inputPath).getParentFile(); // 将模板所在目录作为模板目录
 
-        configuration.setNumberFormat("0.######"); // 使数字格式不带符号如2,023
+            // 指定模板文件所在的路径
+            configuration.setDirectoryForTemplateLoading(templateDir);
 
-        // 创建模板对象，加载指定模板
-        String templateName = new File(inputPath).getName(); // 模板对象的名字
-        Template template = configuration.getTemplate(templateName);
+            // 设置模板文件使用的字符集
+            configuration.setDefaultEncoding("utf-8");
 
-        //输出，生成文件在根目录
-        Writer out = new FileWriter(outputPath);
-        template.process(model, out);
+            configuration.setNumberFormat("0.######"); // 使数字格式不带符号如2,023
 
-        // 关闭资源
-        out.close();
+            // 创建模板对象，加载指定模板
+            String templateName = new File(inputPath).getName(); // 模板对象的名字
+            Template template = configuration.getTemplate(templateName);
+
+            //输出，生成文件在根目录
+            template.process(model, out);
+        }
+
     }
 }
