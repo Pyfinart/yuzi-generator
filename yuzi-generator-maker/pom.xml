@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.pyfinart</groupId>
-    <artifactId>yuzi-generator-basic</artifactId>
+    <artifactId>yuzi-generator-maker</artifactId>
     <version>1.0-SNAPSHOT</version>
 
     <dependencies>
@@ -61,7 +61,7 @@
                     </descriptorRefs>
                     <archive>
                         <manifest>
-                            <mainClass>com.pyfinart.Main</mainClass>
+                            <mainClass>com.pyfinart.maker.Main</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
@@ -79,8 +79,8 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.8.1</version> <!-- 使用最新的插件版本 -->
                 <configuration>
-                    <source>1.8</source> <!-- 设置Java源代码兼容级别 -->
-                    <target>1.8</target> <!-- 设置Java类文件兼容级别 -->
+                    <source>8</source> <!-- 设置Java源代码兼容级别 -->
+                    <target>8</target> <!-- 设置Java类文件兼容级别 -->
                 </configuration>
             </plugin>
         </plugins>

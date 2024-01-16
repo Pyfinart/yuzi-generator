@@ -1,7 +1,6 @@
-package com.pyfinart.generator;
+package com.pyfinart.maker.generator.file;
 
 import cn.hutool.core.io.FileUtil;
-import com.pyfinart.model.MainTemplateConfig;
 import freemarker.template.Configuration;
 import freemarker.template.Template;
 import freemarker.template.TemplateException;
@@ -14,30 +13,21 @@ import java.io.Writer;
 /**
  * 动态文件生成器
  */
-public class DynamicGenerator {
-    public static void main(String[] args) throws IOException, TemplateException {
-        String projectPath = System.getProperty("user.dir") + File.separator + "yuzi-generator-basic";
-        String inputPath = projectPath + File.separator + "src/main/resources/templates/MainTemplate.java.ftl";
-        String outputPath = projectPath + File.separator + "MainTemplate.java";
-
-        MainTemplateConfig mainTemplateConfig = new MainTemplateConfig();
-        mainTemplateConfig.setAuthor("Ruan");
-        mainTemplateConfig.setLoop(false);
-        mainTemplateConfig.setOutput("求和结果：");
-        doGenerate(inputPath, outputPath, mainTemplateConfig);
-    }
+public class DynamicFileGenerator {
 
     /**
      * 生成文件
      *
      * @param inputPath  模板文件输入路径
-     * @param outputPath 输出路径
+     * @param outputPath 输出路径，是一个文件的路径,非目录路径
      * @param model      数据模型
      * @throws IOException
      * @throws TemplateException
      */
     public static void doGenerate(String inputPath, String outputPath, Object model) throws IOException, TemplateException {
-        if (!FileUtil.exist(outputPath)) {
+
+        // 如果文件不存在，则新建，注意是文件，所以不用mkdir
+        if(!FileUtil.exist(outputPath)){
             FileUtil.touch(outputPath);
         }
 
