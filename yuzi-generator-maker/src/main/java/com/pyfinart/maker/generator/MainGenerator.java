@@ -19,10 +19,15 @@ public class MainGenerator {
         System.out.println(meta);
 
         String projectPath = System.getProperty("user.dir");
-        String outputBasePath = projectPath + File.separator + "generated";
+        String outputBasePath = projectPath + File.separator + "generated" + File.separator + meta.getName();
         if (!FileUtil.exist(outputBasePath)) {
             FileUtil.mkdir(outputBasePath);
         }
+
+        // 将模板文件复制到生成的代码生成器中
+        String sourceRootPath = meta.getFileConfig().getSourceRootPath(); // 原始代码模板的位置（非生成器的模板，是要生成的代码的模板）
+        String sourceCopyPath = outputBasePath + File.separator + ".source";
+        FileUtil.copy(sourceRootPath, sourceCopyPath, true);
 
         // 读取resource目录
         ClassPathResource classPathResource = new ClassPathResource("");
@@ -88,11 +93,16 @@ public class MainGenerator {
 
         // pom.xml
         inputFilePath = inputResourcePath + File.separator + PathUtils.connectPath("templates", "pom.xml.ftl");
-        outputFilePath = outputRelativePath + File.separator + PathUtils.connectPath("pom.xml");
+        outputFilePath = outputBasePath + File.separator + PathUtils.connectPath("pom.xml");
+        DynamicFileGenerator.doGenerate(inputFilePath, outputFilePath, meta);
+
+        // README.md
+        inputFilePath = inputResourcePath + File.separator + PathUtils.connectPath("templates", "README.md.ftl");
+        outputFilePath = outputBasePath + File.separator + PathUtils.connectPath("README.md");
         DynamicFileGenerator.doGenerate(inputFilePath, outputFilePath, meta);
 
         // 构建jar包
-        JarGenerator.doGenerator(outputBasePath);
+//        JarGenerator.doGenerator(outputBasePath);
 
         // 封装脚本
         String shellOutputPath = outputBasePath + File.separator + "generator";

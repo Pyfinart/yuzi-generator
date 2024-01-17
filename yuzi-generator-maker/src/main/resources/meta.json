@@ -6,8 +6,9 @@
   "author": "ruan",
   "createTime": "2024-01-10",
   "fileConfig": {
-    "inputRootPath": "/Users/yhj19/developer/MY_Java/yuzi-generator/samples/acm-template-pro",
+    "inputRootPath": ".source/acm-template-pro",
     "outputRootPath": "generated",
+    "sourceRootPath": "/Users/yhj19/developer/MY_Java/yuzi-generator/samples/acm-template-pro",
     "type": "dir",
     "files": [
       {
