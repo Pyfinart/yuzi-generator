@@ -7,6 +7,9 @@ import cn.hutool.core.util.StrUtil;
 import com.pyfinart.maker.meta.Meta.FileConfigDTO;
 import com.pyfinart.maker.meta.Meta.FileConfigDTO.FileDTO;
 import com.pyfinart.maker.meta.Meta.ModelConfigDTO;
+import com.pyfinart.maker.meta.enums.FileGenerateTypeEnum;
+import com.pyfinart.maker.meta.enums.FileTypeEnum;
+import com.pyfinart.maker.meta.enums.ModelTypeEnum;
 
 import java.io.File;
 import java.nio.file.Paths;
@@ -38,7 +41,7 @@ public class MetaValidator {
 
             String ModelDTOType = ModelDTO.getType();
             if (StrUtil.isEmpty(ModelDTOType)) {
-                ModelDTO.setType("String");
+                ModelDTO.setType(ModelTypeEnum.STRING.getValue());
             }
         }
     }
@@ -68,7 +71,7 @@ public class MetaValidator {
         fileConfig.setOutputRootPath(outputRootPath);
 
         // type
-        String fileConfigType = StrUtil.blankToDefault(fileConfig.getType(), "dir");
+        String fileConfigType = StrUtil.blankToDefault(fileConfig.getType(), FileTypeEnum.DIR.getValue());
         fileConfig.setType(fileConfigType);
 
         // fileInfoList
@@ -92,18 +95,18 @@ public class MetaValidator {
             if (StrUtil.isBlank(type)) {
                 // 无文件后缀
                 if (StrUtil.isBlank(FileUtil.getSuffix(inputPath))) {
-                    fileInfo.setType("dir");
+                    fileInfo.setType(FileTypeEnum.DIR.getValue());
                 } else {
-                    fileInfo.setType("file");
+                    fileInfo.setType(FileTypeEnum.FILE.getValue());
                 }
             }
             // generateType：如果文件结尾不为 Ftl，generateType 默认为 static，否则为 dynamic
             if (StrUtil.isBlank(generateType)) {
                 // 为动态模板
                 if (inputPath.endsWith(".ftl")) {
-                    fileInfo.setGenerateType("dynamic");
+                    fileInfo.setGenerateType(FileGenerateTypeEnum.DYNAMIC.getValue());
                 } else {
-                    fileInfo.setGenerateType("static");
+                    fileInfo.setGenerateType(FileGenerateTypeEnum.STATIC.getValue());
                 }
             }
 
@@ -114,8 +117,8 @@ public class MetaValidator {
         // 校验并填充默认值
         String name = StrUtil.blankToDefault(meta.getName(), "my-generator");
         String description = StrUtil.emptyToDefault(meta.getDescription(), "我的模板代码生成器");
-        String author = StrUtil.emptyToDefault(meta.getAuthor(), "yupi");
-        String basePackage = StrUtil.blankToDefault(meta.getBasePackage(), "com.yupi");
+        String author = StrUtil.emptyToDefault(meta.getAuthor(), "ruan");
+        String basePackage = StrUtil.blankToDefault(meta.getBasePackage(), "com.pyfinart");
         String version = StrUtil.emptyToDefault(meta.getVersion(), "1.0");
         String createTime = StrUtil.emptyToDefault(meta.getCreateTime(), DateUtil.now());
         meta.setName(name);
