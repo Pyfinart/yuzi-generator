@@ -1,8 +1,8 @@
-package ${basePackage}.maker;
+package ${basePackage};
 
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.resource.ClassPathResource;
-import ${basePackage}.maker.cli.CommandExecutor;
+import ${basePackage}.cli.CommandExecutor;
 
 import java.io.File;
 

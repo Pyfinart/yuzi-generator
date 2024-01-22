@@ -102,12 +102,29 @@ public class MainGenerator {
         DynamicFileGenerator.doGenerate(inputFilePath, outputFilePath, meta);
 
         // 构建jar包
-//        JarGenerator.doGenerator(outputBasePath);
+        JarGenerator.doGenerator(outputBasePath);
 
         // 封装脚本
         String shellOutputPath = outputBasePath + File.separator + "generator";
         String jarName = String.format("%s-%s-jar-with-dependencies.jar", meta.getName(), meta.getVersion());
         String jarPath = "target/" + jarName; // 这个路径是脚本里面的路径
         ScriptGenerator.doGenerator(shellOutputPath, jarPath);
+
+        // 生成生产环境精简版的产物包，和之前的对比，去掉了生成器代码目录，只保留生成器代码打包成的jar包
+        // 从前面生成的内容复制代码到新的路径
+        String distOutputPath = outputBasePath + "-dist";
+        FileUtil.mkdir(distOutputPath);
+        // 拷贝脚本文件
+        FileUtil.copy(shellOutputPath, distOutputPath, true); // linux脚本
+        FileUtil.copy(shellOutputPath + ".bat", distOutputPath, true); // windows脚本
+
+        // 拷贝源模板文件
+        FileUtil.copy(sourceCopyPath,  distOutputPath, true);
+
+        // copy jar包
+        String targetAbsoluteOutputPath = distOutputPath + File.separator + "/target";
+        FileUtil.mkdir(targetAbsoluteOutputPath);
+        String jarAbsolutePath = outputBasePath + File.separator + jarPath;
+        FileUtil.copy(jarAbsolutePath, targetAbsoluteOutputPath, true);
     }
 }

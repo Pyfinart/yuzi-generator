@@ -11,7 +11,7 @@ public class JarGenerator {
         String mavenCommand = otherMavenCommand;
 
         ProcessBuilder processBuilder = new ProcessBuilder(mavenCommand.split(" "));
-        processBuilder.directory(new File(projectDir));
+        processBuilder.directory(new File(projectDir)); // 目录是输出目录rootPath/generated/acm-template-pro-generator
         Process process = processBuilder.start();
 
         // 打印命令执行的输出信息
