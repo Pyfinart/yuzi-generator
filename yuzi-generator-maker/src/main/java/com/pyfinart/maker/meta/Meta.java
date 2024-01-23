@@ -54,6 +54,14 @@ public class Meta {
             private String description;
             private Object defaultValue;
             private String abbr;
+            private String groupKey;
+            private String groupName;
+            private List<ModelDTO> models;
+            private String condition;
+
+            // 中间参数，非来自元信息，而是为了简化freemarker模版编写
+            // groupKey分组下所有fieldName参数拼接的字符串
+            private String allArgsStr;
         }
     }
 }

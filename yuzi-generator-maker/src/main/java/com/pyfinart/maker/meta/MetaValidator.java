@@ -14,6 +14,7 @@ import com.pyfinart.maker.meta.enums.ModelTypeEnum;
 import java.io.File;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class MetaValidator {
     public static void doValidateAndFill(Meta meta) {
@@ -32,16 +33,34 @@ public class MetaValidator {
         if (!CollectionUtil.isNotEmpty(ModelDTOList)) {
             return;
         }
-        for (ModelConfigDTO.ModelDTO ModelDTO : ModelDTOList) {
-            // 输出路径默认值
-            String fieldName = ModelDTO.getFieldName();
-            if (StrUtil.isBlank(fieldName)) {
-                throw new MetaException("未填写 fieldName");
-            }
+        for (ModelConfigDTO.ModelDTO modelDTO : ModelDTOList) {
+            if (!StrUtil.isEmpty(modelDTO.getGroupKey())) {
+                // 处理中间参数allArgsStr: "--author", "--output"
+                List<ModelConfigDTO.ModelDTO> models = modelDTO.getModels();
+                String allArgsStr = models.stream()
+                        .map(subModel -> String.format("\"--%s\"", subModel.getFieldName()))
+                        .collect(Collectors.joining(", "));
+                modelDTO.setAllArgsStr(allArgsStr);
 
-            String ModelDTOType = ModelDTO.getType();
-            if (StrUtil.isEmpty(ModelDTOType)) {
-                ModelDTO.setType(ModelTypeEnum.STRING.getValue());
+                for (ModelConfigDTO.ModelDTO model : modelDTO.getModels()) {
+                    // 字段名
+                    String fieldName = model.getFieldName();
+                    if (StrUtil.isBlank(fieldName)) {
+                        throw new MetaException("未填写 fieldName");
+                    }
+
+                    String blankToDefault = StrUtil.blankToDefault(model.getType(), ModelTypeEnum.STRING.getValue());
+                    model.setType(blankToDefault);
+                }
+            } else {
+                // 字段名
+                String fieldName = modelDTO.getFieldName();
+                if (StrUtil.isBlank(fieldName)) {
+                    throw new MetaException("未填写 fieldName");
+                }
+
+                String blankToDefault = StrUtil.blankToDefault(modelDTO.getType(), ModelTypeEnum.STRING.getValue());
+                modelDTO.setType(blankToDefault);
             }
         }
     }
@@ -80,11 +99,10 @@ public class MetaValidator {
         }
         for (FileDTO fileInfo : fileInfoList) {
             String inputPath = fileInfo.getInputPath();
-            String outputPath = fileInfo.getOutputPath();
             String type = fileInfo.getType();
             String generateType = fileInfo.getGenerateType();
             // 类型为 group 不做校验
-            if(FileTypeEnum.GROUP.getValue().equals(type)){
+            if (FileTypeEnum.GROUP.getValue().equals(type)) {
                 continue;
             }
             // inputPath 必填
@@ -92,9 +110,9 @@ public class MetaValidator {
                 throw new MetaException("未填写 inputPath");
             }
             // outputPath: 默认等于 inputPath
-            if (StrUtil.isEmpty(outputPath)) {
-                fileInfo.setOutputPath(inputPath);
-            }
+            String blankToDefault = StrUtil.blankToDefault(fileInfo.getOutputPath(), inputPath);
+            fileInfo.setOutputPath(blankToDefault);
+
             // type：默认 inputPath 有文件后缀（如 .java）为 file，否则为 dir
             if (StrUtil.isBlank(type)) {
                 // 无文件后缀
