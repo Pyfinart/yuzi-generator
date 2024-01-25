@@ -9,6 +9,10 @@ import cn.hutool.json.JSONUtil;
 import com.pyfinart.maker.meta.Meta;
 import com.pyfinart.maker.meta.enums.FileGenerateTypeEnum;
 import com.pyfinart.maker.meta.enums.FileTypeEnum;
+import com.pyfinart.maker.template.enums.FileFilterRangeEnum;
+import com.pyfinart.maker.template.enums.FileFilterRuleEnum;
+import com.pyfinart.maker.template.model.FileFilterConfig;
+import com.pyfinart.maker.template.model.TemplateMakerFileConfig;
 
 import java.io.File;
 import java.nio.file.Paths;
@@ -26,15 +30,21 @@ public class TemplateMaker {
     /**
      * 制作模板和meta文件
      *
-     * @param newMeta             meta文件对应的对象
-     * @param modelDTO            要挖坑的位置对应的模型
-     * @param originalProjectPath 原始文件的路径
-     * @param fileInputPathList   原始文件路径下的用来制作模板的文件的相对路径
-     * @param searchStr           用于搜索替换挖坑的内容
-     * @param id                  命名空间id，用于区别不同次的生成项目，以及多次对同一生成内容做进一步模板挖坑
+     * @param newMeta                 meta文件对应的对象
+     * @param modelDTO                要挖坑的位置对应的模型
+     * @param originalProjectPath     原始文件的路径
+     * @param templateMakerFileConfig 原始文件路径下的用来制作模板的文件的路径（相对或绝对）以及过滤条件
+     * @param searchStr               用于搜索替换挖坑的内容
+     * @param id                      命名空间id，用于区别不同次的生成项目，以及多次对同一生成内容做进一步模板挖坑
      * @return 命名空间id
      */
-    private static long makeTemplate(Meta newMeta, Meta.ModelConfigDTO.ModelDTO modelDTO, String originalProjectPath, List<String> fileInputPathList, String searchStr, Long id) {
+    private static long makeTemplate(
+            Meta newMeta,
+            Meta.ModelConfigDTO.ModelDTO modelDTO,
+            String originalProjectPath,
+            TemplateMakerFileConfig templateMakerFileConfig,
+            String searchStr,
+            Long id) {
         // 没有 id 则生成
         if (id == null) {
             id = IdUtil.getSnowflakeNextId();
@@ -61,18 +71,22 @@ public class TemplateMaker {
         String sourcePath = templatePath + File.separator + FileUtil.getLastPathEle(Paths.get(originalProjectPath)).toString();
 
         // 二、模板文件生成
+        List<TemplateMakerFileConfig.FileInfoConfig> fileInfoConfigs = templateMakerFileConfig.getFiles();
         ArrayList<Meta.FileConfigDTO.FileDTO> fileDTOS = new ArrayList<>();
-        for (String fileInputPath : fileInputPathList) {
-            String fileAbsoluteInputPath = sourcePath + File.separator + fileInputPath;
-            if (FileUtil.isDirectory(fileAbsoluteInputPath)) {
-                List<File> files1 = FileUtil.loopFiles(fileAbsoluteInputPath);
-                for (File file : files1) {
-                    Meta.FileConfigDTO.FileDTO fileDTO = makeFileTemplate(modelDTO, file, searchStr, sourcePath);
-                    if (fileDTO == null) continue;
-                    fileDTOS.add(fileDTO);
-                }
-            } else {
-                Meta.FileConfigDTO.FileDTO fileDTO = makeFileTemplate(modelDTO, new File(fileInputPath), searchStr, sourcePath);
+        for (TemplateMakerFileConfig.FileInfoConfig fileInfoCOnfig : fileInfoConfigs) {
+            String fileInputPath = fileInfoCOnfig.getPath();
+
+            // 如果填的是相对路径，要改为绝对路径
+            if (!fileInputPath.startsWith(sourcePath)) {
+                fileInputPath = sourcePath + File.separator + fileInputPath;
+            }
+
+            // 传入绝对路径
+            List<File> fileList = FileFilter.doFilter(fileInputPath, fileInfoCOnfig.getFilterConfigList());
+
+            for (File file : fileList) {
+                Meta.FileConfigDTO.FileDTO fileDTO = makeFileTemplate(modelDTO, file, searchStr, sourcePath);
+                if (fileDTO == null) continue;
                 fileDTOS.add(fileDTO);
             }
         }
@@ -237,7 +251,25 @@ public class TemplateMaker {
         String inputFilePath2 = "src/main/java/com/yupi/springbootinit/controller";
         List<String> inputFilePathList = Arrays.asList(inputFilePath1, inputFilePath2);
 
-        long l = makeTemplate(meta, modelDTO, originalProjectPath, inputFilePathList, searchStr, null);
+        // 文件过滤
+        // 只处理 common 包下文件名称包含 Base 的文件和 controller 包下的文件。
+        TemplateMakerFileConfig templateMakerFileConfig = new TemplateMakerFileConfig();
+        TemplateMakerFileConfig.FileInfoConfig fileInfoConfig1 = new TemplateMakerFileConfig.FileInfoConfig();
+        fileInfoConfig1.setPath(inputFilePath1);
+        List<FileFilterConfig> fileFilterConfigList = new ArrayList<>();
+        FileFilterConfig fileFilterConfig = FileFilterConfig.builder()
+                .range(FileFilterRangeEnum.FILE_NAME.getValue())
+                .rule(FileFilterRuleEnum.CONTAINS.getValue())
+                .value("Base")
+                .build();
+        fileFilterConfigList.add(fileFilterConfig);
+        fileInfoConfig1.setFilterConfigList(fileFilterConfigList);
+
+        TemplateMakerFileConfig.FileInfoConfig fileInfoConfig2 = new TemplateMakerFileConfig.FileInfoConfig();
+        fileInfoConfig2.setPath(inputFilePath2);
+        templateMakerFileConfig.setFiles(Arrays.asList(fileInfoConfig1, fileInfoConfig2));
+
+        long l = makeTemplate(meta, modelDTO, originalProjectPath, templateMakerFileConfig, searchStr, null);
         System.out.println(l);
     }
 
