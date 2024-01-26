@@ -19,6 +19,7 @@ import com.pyfinart.maker.template.model.TemplateMakerModelConfig;
 import java.io.File;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -161,8 +162,21 @@ public class TemplateMaker {
             models.addAll(newModelDTOs);
 
             // 配置驱去重
-            newMeta.getModelConfig().setModels(modelGroupDistinct(models));
-            newMeta.getFileConfig().setFiles(fileGroupDistinct(files));
+            newMeta.getModelConfig().setModels(groupDistinct(
+                    models,
+                    Meta.ModelConfigDTO.ModelDTO::getGroupKey,
+                    Meta.ModelConfigDTO.ModelDTO::getModels,
+                    Meta.ModelConfigDTO.ModelDTO::getFieldName,
+                    Meta.ModelConfigDTO.ModelDTO::setModels
+            ));
+//            newMeta.getFileConfig().setFiles(fileGroupDistinct(files));
+            newMeta.getFileConfig().setFiles(groupDistinct(
+                    files,
+                    Meta.FileConfigDTO.FileDTO::getGroupKey,
+                    Meta.FileConfigDTO.FileDTO::getFiles,
+                    Meta.FileConfigDTO.FileDTO::getInputPath,
+                    Meta.FileConfigDTO.FileDTO::setFiles
+            ));
 
             // 2. 写回
             FileUtil.writeUtf8String(JSONUtil.toJsonPrettyStr(newMeta), metaOutputPath);
@@ -352,6 +366,51 @@ public class TemplateMaker {
         mergedList.addAll(distinctBy(noGroupModelBeforeDistinct, Meta.ModelConfigDTO.ModelDTO::getFieldName));
         return mergedList;
     }
+
+    /**
+     * 当多次分步制作模版或文件时，需要对同组模型和文件配置进行去重和合并的通用方法
+     *
+     * @param data              模型配置列表或文件配置列表
+     * @param groupKeyGetter    Meta.ModelConfigDTO.ModelDTO::getGroupKey或者Meta.FileConfigDTO.FileDTO::getGroupKey
+     * @param itemGetter        Meta.ModelConfigDTO.ModelDTO::getModels或者Meta.FileConfigDTO.FileDTO::getFiles
+     * @param distinctKeyGetter Meta.ModelConfigDTO.ModelDTO::getFieldName或Meta.FileConfigDTO.FileDTO::getInputPath
+     * @param setItemsMethod    (modelDTO, modelList) -> modelDTO.setModels(modelList)或(fileDTO, fileList) -> fileDTO.setFiles(fileList)
+     * @param <T>
+     * @return
+     */
+    private static <T> List<T> groupDistinct(
+            List<T> data,
+            Function<T, String> groupKeyGetter,
+            Function<T, List<T>> itemGetter,
+            Function<T, Object> distinctKeyGetter,
+            BiConsumer<T, List<T>> setItemsMethod
+    ) {
+        Map<String, List<T>> configMap = data.stream()
+                .filter(element -> StrUtil.isNotBlank(groupKeyGetter.apply(element)))
+                .collect(
+                        Collectors.groupingBy(groupKeyGetter)
+                );
+
+        Map<String, T> resMap = new HashMap<>();
+        for (Map.Entry<String, List<T>> entry : configMap.entrySet()) {
+            List<T> beforeDistinct = entry.getValue();
+            List<T> flatBeforeDistinct = beforeDistinct.stream()
+                    .flatMap(element -> itemGetter.apply(element).stream())
+                    .collect(Collectors.toList());
+            List<T> configsAfterDistinct = distinctBy(flatBeforeDistinct, distinctKeyGetter);
+            T last = CollectionUtil.getLast(beforeDistinct);
+            setItemsMethod.accept(last, configsAfterDistinct);
+            resMap.put(entry.getKey(), last);
+        }
+
+        ArrayList<T> mergedList = new ArrayList<>(resMap.values());
+        List<T> noGroupItemsBeforeDistinct = data.stream()
+                .filter(element -> StrUtil.isBlank(groupKeyGetter.apply(element)))
+                .collect(Collectors.toList());
+        mergedList.addAll(distinctBy(noGroupItemsBeforeDistinct, distinctKeyGetter));
+        return mergedList;
+    }
+
 
     /**
      * 去重通用方法，在这里用于对模型配置和文件配置去重
