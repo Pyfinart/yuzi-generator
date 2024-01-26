@@ -2,6 +2,7 @@ package com.pyfinart.maker.template;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.bean.copier.CopyOptions;
+import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
@@ -13,12 +14,11 @@ import com.pyfinart.maker.template.enums.FileFilterRangeEnum;
 import com.pyfinart.maker.template.enums.FileFilterRuleEnum;
 import com.pyfinart.maker.template.model.FileFilterConfig;
 import com.pyfinart.maker.template.model.TemplateMakerFileConfig;
+import com.pyfinart.maker.template.model.TemplateMakerModelConfig;
 
 import java.io.File;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -30,17 +30,17 @@ public class TemplateMaker {
     /**
      * 制作模板和meta文件
      *
-     * @param newMeta                 meta文件对应的对象
-     * @param modelDTO                要挖坑的位置对应的模型
-     * @param originalProjectPath     原始文件的路径
-     * @param templateMakerFileConfig 原始文件路径下的用来制作模板的文件的路径（相对或绝对）以及过滤条件
-     * @param searchStr               用于搜索替换挖坑的内容
-     * @param id                      命名空间id，用于区别不同次的生成项目，以及多次对同一生成内容做进一步模板挖坑
+     * @param newMeta                  meta文件对应的对象
+     * @param templateMakerModelConfig 要挖坑的位置对应的模型，可多个模型，可分组模型
+     * @param originalProjectPath      原始文件的路径
+     * @param templateMakerFileConfig  原始文件路径下的用来制作模板的文件的路径（相对或绝对）以及过滤条件
+     * @param searchStr                用于搜索替换挖坑的内容
+     * @param id                       命名空间id，用于区别不同次的生成项目，以及多次对同一生成内容做进一步模板挖坑
      * @return 命名空间id
      */
     private static long makeTemplate(
             Meta newMeta,
-            Meta.ModelConfigDTO.ModelDTO modelDTO,
+            TemplateMakerModelConfig templateMakerModelConfig,
             String originalProjectPath,
             TemplateMakerFileConfig templateMakerFileConfig,
             String searchStr,
@@ -66,6 +66,38 @@ public class TemplateMaker {
 
         // 一。输入信息
 
+        // 处理模型信息
+        List<TemplateMakerModelConfig.ModelInfoConfig> models1 = templateMakerModelConfig.getModels();
+        // 转换成meta文件接受的ModelDTO
+        List<Meta.ModelConfigDTO.ModelDTO> modelDTOList = models1.stream()
+                .map(model -> {
+                    Meta.ModelConfigDTO.ModelDTO modelConfigDTO = new Meta.ModelConfigDTO.ModelDTO();
+                    BeanUtil.copyProperties(model, modelConfigDTO);
+                    return modelConfigDTO;
+                }).collect(Collectors.toList());
+
+        List<Meta.ModelConfigDTO.ModelDTO> newModelDTOs = new ArrayList<>();
+        // 如果有分组，则增加分组配置分组
+        TemplateMakerModelConfig.ModelGroupConfig modelGroupConfig = templateMakerModelConfig.getModelGroupConfig();
+        if (modelGroupConfig != null) {
+            String condition = modelGroupConfig.getCondition();
+            String groupName = modelGroupConfig.getGroupName();
+            String groupKey = modelGroupConfig.getGroupKey();
+
+            // 新增分组配置
+            Meta.ModelConfigDTO.ModelDTO groupModelDTO = new Meta.ModelConfigDTO.ModelDTO();
+            groupModelDTO.setGroupKey(groupKey);
+            groupModelDTO.setGroupName(groupName);
+            groupModelDTO.setCondition(condition);
+            // model放入一个组内
+            groupModelDTO.setModels(modelDTOList);
+
+            newModelDTOs.add(groupModelDTO);
+        } else {
+            // 不分组，直接添加所有模型信息
+            newModelDTOs.addAll(modelDTOList);
+        }
+
         // 2. 输入文件的信息
         // /.../yuzi-generator/yuzi-generator-maker/.temp/1749794565135020032/acm-template
         String sourcePath = templatePath + File.separator + FileUtil.getLastPathEle(Paths.get(originalProjectPath)).toString();
@@ -81,11 +113,12 @@ public class TemplateMaker {
                 fileInputPath = sourcePath + File.separator + fileInputPath;
             }
 
+            // 按照FileInfoConfig中的过滤条件FileFilterConfig过滤
             // 传入绝对路径
             List<File> fileList = FileFilter.doFilter(fileInputPath, fileInfoCOnfig.getFilterConfigList());
 
             for (File file : fileList) {
-                Meta.FileConfigDTO.FileDTO fileDTO = makeFileTemplate(modelDTO, file, searchStr, sourcePath);
+                Meta.FileConfigDTO.FileDTO fileDTO = makeFileTemplate(templateMakerModelConfig, file, sourcePath);
                 if (fileDTO == null) continue;
                 fileDTOS.add(fileDTO);
             }
@@ -94,6 +127,27 @@ public class TemplateMaker {
         String metaOutputPath = sourcePath + File.separator + "meta.json";
 
         // 三、元信息文件生成
+
+        // 如果有分组，则增加分组配置分组
+        TemplateMakerFileConfig.FileGroupConfig fileGroupConfig = templateMakerFileConfig.getFileGroupConfig();
+        if (fileGroupConfig != null) {
+            String condition = fileGroupConfig.getCondition();
+            String groupName = fileGroupConfig.getGroupName();
+            String groupKey = fileGroupConfig.getGroupKey();
+
+            // 新增分组配置
+            Meta.FileConfigDTO.FileDTO groupFileDTO = new Meta.FileConfigDTO.FileDTO();
+            groupFileDTO.setGroupKey(groupKey);
+            groupFileDTO.setGroupName(groupName);
+            groupFileDTO.setCondition(condition);
+            groupFileDTO.setType(FileTypeEnum.GROUP.getValue());
+            // 文件放入一个组内
+            groupFileDTO.setFiles(fileDTOS);
+
+            fileDTOS = new ArrayList<>();
+            fileDTOS.add(groupFileDTO);
+        }
+
         // 若meta.json存在，说明现在是在追加或者修改元信息
         if (FileUtil.exist(metaOutputPath)) {
             Meta oldMeta = JSONUtil.toBean(FileUtil.readUtf8String(metaOutputPath), Meta.class);
@@ -104,11 +158,11 @@ public class TemplateMaker {
             List<Meta.FileConfigDTO.FileDTO> files = newMeta.getFileConfig().getFiles();
             files.addAll(fileDTOS);
             List<Meta.ModelConfigDTO.ModelDTO> models = newMeta.getModelConfig().getModels();
-            models.add(modelDTO);
+            models.addAll(newModelDTOs);
 
             // 配置驱去重
-            newMeta.getModelConfig().setModels(distinctBy(models, Meta.ModelConfigDTO.ModelDTO::getFieldName));
-            newMeta.getFileConfig().setFiles(distinctBy(files, Meta.FileConfigDTO.FileDTO::getInputPath));
+            newMeta.getModelConfig().setModels(modelGroupDistinct(models));
+            newMeta.getFileConfig().setFiles(fileGroupDistinct(files));
 
             // 2. 写回
             FileUtil.writeUtf8String(JSONUtil.toJsonPrettyStr(newMeta), metaOutputPath);
@@ -128,7 +182,7 @@ public class TemplateMaker {
 
             List<Meta.ModelConfigDTO.ModelDTO> modelInfoList = new ArrayList<>();
             modelConfig.setModels(modelInfoList);
-            modelInfoList.add(modelDTO);
+            modelInfoList.addAll(newModelDTOs);
 
             // 2. 输出元信息文件
             FileUtil.writeUtf8String(JSONUtil.toJsonPrettyStr(newMeta), metaOutputPath);
@@ -141,13 +195,12 @@ public class TemplateMaker {
     /**
      * 制作文件模板
      *
-     * @param modelDTO      要挖坑的位置对应的模型
-     * @param fileInputFile 原始文件路径下的用来制作模板的文件的绝对路径File对象
-     * @param searchStr     用于搜索替换挖坑的内容
-     * @param sourcePath    存放制作好的模板代码项目的根路径：/.../yuzi-generator/yuzi-generator-maker/.temp/1749794565135020032/acm-template
+     * @param templateMakerModelConfig 要挖坑的位置对应的模型，可多个，可分组
+     * @param fileInputFile            原始文件路径下的用来制作模板的文件的绝对路径File对象
+     * @param sourcePath               存放制作好的模板代码项目的根路径：/.../yuzi-generator/yuzi-generator-maker/.temp/1749794565135020032/acm-template
      * @return
      */
-    private static Meta.FileConfigDTO.FileDTO makeFileTemplate(Meta.ModelConfigDTO.ModelDTO modelDTO, File fileInputFile, String searchStr, String sourcePath) {
+    private static Meta.FileConfigDTO.FileDTO makeFileTemplate(TemplateMakerModelConfig templateMakerModelConfig, File fileInputFile, String sourcePath) {
 
         // 挖坑文件相对路径
         String fileInputPath = fileInputFile.getAbsolutePath().replace(sourcePath + "/", "");
@@ -161,16 +214,28 @@ public class TemplateMaker {
         String fileAbsoluteInputPath = fileInputFile.getAbsolutePath();
         String fileAbsoluteOutputPath = fileInputFile.getAbsolutePath() + ".ftl";
 
-        // 若存在，则不是第一次生成，在已有基础上做修改
         String fileContent;
+        // 若存在，则不是第一次生成，在已有基础上做修改
         if (FileUtil.exist(fileAbsoluteOutputPath)) {
             fileContent = FileUtil.readUtf8String(fileAbsoluteOutputPath);
         } else {
             fileContent = FileUtil.readUtf8String(fileAbsoluteInputPath);
         }
 
-        String replacement = String.format("${%s}", modelDTO.getFieldName());
-        String newFileContent = StrUtil.replace(fileContent, searchStr, replacement);
+        // 多个模型，对于同一个文件，遍历模型进行多轮替换
+        List<TemplateMakerModelConfig.ModelInfoConfig> modelInfoConfigs = templateMakerModelConfig.getModels();
+        TemplateMakerModelConfig.ModelGroupConfig modelGroupConfig = templateMakerModelConfig.getModelGroupConfig();
+        String newFileContent = fileContent;
+        String replacement;
+        for (TemplateMakerModelConfig.ModelInfoConfig modelInfoConfig : modelInfoConfigs) {
+            // 无分组
+            if (modelGroupConfig == null) {
+                replacement = String.format("${%s}", modelInfoConfig.getFieldName());
+            } else {
+                replacement = String.format("${%s.%s}", modelGroupConfig.getGroupKey(), modelInfoConfig.getFieldName());
+            }
+            newFileContent = StrUtil.replace(newFileContent, modelInfoConfig.getReplaceText(), replacement);
+        }
 
 
         // 三、生成元信息配置文件
@@ -201,11 +266,99 @@ public class TemplateMaker {
     }
 
     /**
+     * 当多次分步制作模版时，需要对同组文件配置进行去重和合并
+     *
+     * @param files 文件配置列表
+     * @return
+     */
+    private static List<Meta.FileConfigDTO.FileDTO> fileGroupDistinct(List<Meta.FileConfigDTO.FileDTO> files) {
+        // 1。将所有文件配置分为有分组和无分组
+
+        // 2。先处理有分组，如下，"groupKey":"a"的两组需要合并和去重
+        // filter: {"groupKey":"a", "files":[1, 2]}, {"groupKey":"a", "files":[2, 3]}, {"groupKey":"aa", "files":[4, 5]}
+        // groupingBy: {"groupKey":"a", "files":[[1, 2], [2, 3]]}, {"groupKey":"aa", "files":[[4, 5]]}
+        Map<String, List<Meta.FileConfigDTO.FileDTO>> fileDTOsMap = files.stream()
+                .filter(fileDTO -> StrUtil.isNotBlank(fileDTO.getGroupKey()))
+                .collect(
+                        Collectors.groupingBy(Meta.FileConfigDTO.FileDTO::getGroupKey)
+                );
+        // 同组配置合并
+        // {"groupKey":"a", "files":[[1, 2], [2, 3]]}
+        // {"groupKey":"a", "files":[1, 2, 2, 3]}
+        // {"groupKey":"a", "files":[1, 2, 3]}
+        Map<String, Meta.FileConfigDTO.FileDTO> resMap = new HashMap<>();
+        for (Map.Entry<String, List<Meta.FileConfigDTO.FileDTO>> entry : fileDTOsMap.entrySet()) {
+            List<Meta.FileConfigDTO.FileDTO> beforeDistinct = entry.getValue(); // {"groupKey":"a", "files":[[1, 2], [2, 3]]}
+            List<Meta.FileConfigDTO.FileDTO> flatBeforeDistinct = beforeDistinct.stream()
+                    .flatMap(fileDTO -> fileDTO.getFiles().stream())
+                    .collect(Collectors.toList());// {"groupKey":"a", "files":[1, 2, 2, 3]}
+            List<Meta.FileConfigDTO.FileDTO> fileDTOsAfterDistinct = distinctBy(
+                    flatBeforeDistinct,
+                    Meta.FileConfigDTO.FileDTO::getInputPath
+            ); // {"groupKey":"a", "files":[1, 2, 3]}
+
+            // 对于多个groupKey相同的组，后来的groupName和condition都可以不一样，使用最新的
+            Meta.FileConfigDTO.FileDTO last = CollectionUtil.getLast(beforeDistinct);
+            last.setFiles(fileDTOsAfterDistinct);
+            resMap.put(entry.getKey(), last);
+        }
+        // 3。把分组后的结果添加到结果列表
+        ArrayList<Meta.FileConfigDTO.FileDTO> mergedList = new ArrayList<>(resMap.values());
+
+        // 4。处理并添加没有分组的文件
+        List<Meta.FileConfigDTO.FileDTO> noGroupFileBeforeDistinct = files.stream()
+                .filter(fileDTO -> StrUtil.isBlank(fileDTO.getGroupKey()))
+                .collect(Collectors.toList());
+        mergedList.addAll(distinctBy(noGroupFileBeforeDistinct, Meta.FileConfigDTO.FileDTO::getInputPath));
+
+        return mergedList;
+    }
+
+    /**
+     * 当多次分步制作模版时，需要对同组模型配置进行去重和合并。逻辑与fileGroupDistinct类似
+     *
+     * @param models 模型配置列表
+     * @return
+     */
+    private static List<Meta.ModelConfigDTO.ModelDTO> modelGroupDistinct(List<Meta.ModelConfigDTO.ModelDTO> models) {
+        // 1。将所有文件配置分为有分组和无分组
+        // 2。先处理有分组
+        Map<String, List<Meta.ModelConfigDTO.ModelDTO>> modelDTOsMap = models.stream()
+                .filter(model -> StrUtil.isNotBlank(model.getGroupKey()))
+                .collect(
+                        Collectors.groupingBy(Meta.ModelConfigDTO.ModelDTO::getGroupKey)
+                );
+
+        Map<String, Meta.ModelConfigDTO.ModelDTO> resMap = new HashMap<>();
+        for (Map.Entry<String, List<Meta.ModelConfigDTO.ModelDTO>> entry : modelDTOsMap.entrySet()) {
+            List<Meta.ModelConfigDTO.ModelDTO> beforeDistinct = entry.getValue();
+            List<Meta.ModelConfigDTO.ModelDTO> flatBeforeDistinct = beforeDistinct.stream()
+                    .flatMap(modelDTO -> modelDTO.getModels().stream())
+                    .collect(Collectors.toList());
+            List<Meta.ModelConfigDTO.ModelDTO> modelDTOsAfterDistinct = distinctBy(
+                    flatBeforeDistinct,
+                    Meta.ModelConfigDTO.ModelDTO::getFieldName
+            );
+            Meta.ModelConfigDTO.ModelDTO last = CollectionUtil.getLast(beforeDistinct);
+            last.setModels(modelDTOsAfterDistinct);
+            resMap.put(entry.getKey(), last);
+        }
+        // 3。把分组后的结果添加到结果列表
+        ArrayList<Meta.ModelConfigDTO.ModelDTO> mergedList = new ArrayList<>(resMap.values());
+        // 4。处理并添加没有分组的文件
+        List<Meta.ModelConfigDTO.ModelDTO> noGroupModelBeforeDistinct = models.stream()
+                .filter(model -> StrUtil.isBlank(model.getGroupKey()))
+                .collect(Collectors.toList());
+        mergedList.addAll(distinctBy(noGroupModelBeforeDistinct, Meta.ModelConfigDTO.ModelDTO::getFieldName));
+        return mergedList;
+    }
+
+    /**
      * 去重通用方法，在这里用于对模型配置和文件配置去重
      *
      * @param list      要去重的列表
      * @param keyMapper 用于从元素中提取键的函数
-     * @param <T>       列表元素的类型
+     * @param <T>       列表元素的类型目前是Meta.ModelConfigDTO.ModelDTO或Meta.FileConfigDTO.FileDTO
      * @return 去重后的列表
      */
     private static <T> List<T> distinctBy(List<T> list, Function<? super T, ?> keyMapper) {
@@ -240,16 +393,39 @@ public class TemplateMaker {
 
         String projectPath = System.getProperty("user.dir");
         String originalProjectPath = new File(projectPath).getParent() + File.separator + "samples/springboot-init";
-        String fileInputPath = "src/main/java/com/yupi/springbootinit"; // 因为方法中有了sourcePath，文件路径只需要相对路径
 
 //        String searchStr = "Sum: ";
 
         // 替换变量（第二次）
         String searchStr = "BaseResponse";
 
-        String inputFilePath1 = "src/main/java/com/yupi/springbootinit/common";
-        String inputFilePath2 = "src/main/java/com/yupi/springbootinit/controller";
-        List<String> inputFilePathList = Arrays.asList(inputFilePath1, inputFilePath2);
+        String inputFilePath1 = "src/main/java/com/yupi/springbootinit/common";  // 因为方法中有了sourcePath，文件路径只需要相对路径
+        String inputFilePath2 = "src/main/resources/application.yml";
+
+        // 模型参数配置
+        TemplateMakerModelConfig templateMakerModelConfig = new TemplateMakerModelConfig();
+
+        // 模型组配置
+        TemplateMakerModelConfig.ModelGroupConfig modelGroupConfig = new TemplateMakerModelConfig.ModelGroupConfig();
+        modelGroupConfig.setGroupKey("mysql");
+        modelGroupConfig.setGroupName("数据库配置");
+        templateMakerModelConfig.setModelGroupConfig(modelGroupConfig);
+
+        // 模型配置
+        TemplateMakerModelConfig.ModelInfoConfig modelInfoConfig1 = new TemplateMakerModelConfig.ModelInfoConfig();
+        modelInfoConfig1.setFieldName("url");
+        modelInfoConfig1.setType("String");
+        modelInfoConfig1.setDefaultValue("jdbc:mysql://localhost:3306/my_db");
+        modelInfoConfig1.setReplaceText("jdbc:mysql://localhost:3306/my_db");
+
+        TemplateMakerModelConfig.ModelInfoConfig modelInfoConfig2 = new TemplateMakerModelConfig.ModelInfoConfig();
+        modelInfoConfig2.setFieldName("username");
+        modelInfoConfig2.setType("String");
+        modelInfoConfig2.setDefaultValue("root");
+        modelInfoConfig2.setReplaceText("root");
+
+        List<TemplateMakerModelConfig.ModelInfoConfig> modelInfoConfigList = Arrays.asList(modelInfoConfig1, modelInfoConfig2);
+        templateMakerModelConfig.setModels(modelInfoConfigList);
 
         // 文件过滤
         // 只处理 common 包下文件名称包含 Base 的文件和 controller 包下的文件。
@@ -265,11 +441,19 @@ public class TemplateMaker {
         fileFilterConfigList.add(fileFilterConfig);
         fileInfoConfig1.setFilterConfigList(fileFilterConfigList);
 
+        // 分组配置
+        // 分组1
+        TemplateMakerFileConfig.FileGroupConfig fileGroupConfig = new TemplateMakerFileConfig.FileGroupConfig();
+        fileGroupConfig.setCondition("output输出");
+        fileGroupConfig.setGroupName("testGroup2");
+        fileGroupConfig.setGroupKey("测试分组");
+        templateMakerFileConfig.setFileGroupConfig(fileGroupConfig);
+        // 分组2
         TemplateMakerFileConfig.FileInfoConfig fileInfoConfig2 = new TemplateMakerFileConfig.FileInfoConfig();
         fileInfoConfig2.setPath(inputFilePath2);
         templateMakerFileConfig.setFiles(Arrays.asList(fileInfoConfig1, fileInfoConfig2));
 
-        long l = makeTemplate(meta, modelDTO, originalProjectPath, templateMakerFileConfig, searchStr, null);
+        long l = makeTemplate(meta, templateMakerModelConfig, originalProjectPath, templateMakerFileConfig, searchStr, 1750752428187742208l);
         System.out.println(l);
     }
 
