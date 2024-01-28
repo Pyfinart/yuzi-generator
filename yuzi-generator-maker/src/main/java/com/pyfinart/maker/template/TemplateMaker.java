@@ -35,16 +35,14 @@ public class TemplateMaker {
      * @param templateMakerModelConfig 要挖坑的位置对应的模型，可多个模型，可分组模型
      * @param originalProjectPath      原始文件的路径
      * @param templateMakerFileConfig  原始文件路径下的用来制作模板的文件的路径（相对或绝对）以及过滤条件
-     * @param searchStr                用于搜索替换挖坑的内容
      * @param id                       命名空间id，用于区别不同次的生成项目，以及多次对同一生成内容做进一步模板挖坑
      * @return 命名空间id
      */
-    private static long makeTemplate(
+    static long makeTemplate(
             Meta newMeta,
             TemplateMakerModelConfig templateMakerModelConfig,
             String originalProjectPath,
             TemplateMakerFileConfig templateMakerFileConfig,
-            String searchStr,
             Long id) {
         // 没有 id 则生成
         if (id == null) {
@@ -125,7 +123,7 @@ public class TemplateMaker {
             }
         }
 
-        String metaOutputPath = sourcePath + File.separator + "meta.json";
+        String metaOutputPath = templatePath + File.separator + "meta.json";
 
         // 三、元信息文件生成
 
@@ -174,7 +172,7 @@ public class TemplateMaker {
                     files,
                     Meta.FileConfigDTO.FileDTO::getGroupKey,
                     Meta.FileConfigDTO.FileDTO::getFiles,
-                    Meta.FileConfigDTO.FileDTO::getInputPath,
+                    Meta.FileConfigDTO.FileDTO::getOutputPath,
                     Meta.FileConfigDTO.FileDTO::setFiles
             ));
 
@@ -256,8 +254,8 @@ public class TemplateMaker {
         // 实现思路，首先在程序中实例化Meta类，并填充参数，在写入文件
 
         Meta.FileConfigDTO.FileDTO fileDTO = new Meta.FileConfigDTO.FileDTO();
-        fileDTO.setInputPath(fileInputPath);
-        fileDTO.setOutputPath(fileOutputPath);
+        fileDTO.setInputPath(fileOutputPath); // 这里之所以输入输出相反，是因为我们的模板给生成器用时，生成器是将ftl作为输入的
+        fileDTO.setOutputPath(fileInputPath);
         fileDTO.setType(FileTypeEnum.FILE.getValue());
 
         // 写入模板文件
@@ -267,7 +265,7 @@ public class TemplateMaker {
                 fileDTO.setGenerateType(FileGenerateTypeEnum.DYNAMIC.getValue());
             } else {
                 // 输出路径 = 输入路径
-                fileDTO.setOutputPath(fileInputPath);
+                fileDTO.setInputPath(fileInputPath);
                 fileDTO.setGenerateType(FileGenerateTypeEnum.STATIC.getValue());
             }
 
@@ -308,7 +306,7 @@ public class TemplateMaker {
                     .collect(Collectors.toList());// {"groupKey":"a", "files":[1, 2, 2, 3]}
             List<Meta.FileConfigDTO.FileDTO> fileDTOsAfterDistinct = distinctBy(
                     flatBeforeDistinct,
-                    Meta.FileConfigDTO.FileDTO::getInputPath
+                    Meta.FileConfigDTO.FileDTO::getOutputPath
             ); // {"groupKey":"a", "files":[1, 2, 3]}
 
             // 对于多个groupKey相同的组，后来的groupName和condition都可以不一样，使用最新的
@@ -323,7 +321,7 @@ public class TemplateMaker {
         List<Meta.FileConfigDTO.FileDTO> noGroupFileBeforeDistinct = files.stream()
                 .filter(fileDTO -> StrUtil.isBlank(fileDTO.getGroupKey()))
                 .collect(Collectors.toList());
-        mergedList.addAll(distinctBy(noGroupFileBeforeDistinct, Meta.FileConfigDTO.FileDTO::getInputPath));
+        mergedList.addAll(distinctBy(noGroupFileBeforeDistinct, Meta.FileConfigDTO.FileDTO::getOutputPath));
 
         return mergedList;
     }
@@ -431,89 +429,6 @@ public class TemplateMaker {
     // Function.identity() 返回的是一个单例恒等函数，这意味着它不会每次调用时都创建一个新的对象。相反，o -> o 每次使用时都会创建一个新的
     // Function 实例。因此，使用 Function.identity() 可以减少不必要的对象创建，从而减少垃圾回收的压力。
 
-    public static void main(String[] args) {
 
-        String name = "acm-template-generator";
-        String description = "ACM 示例模板生成器";
-        Meta meta = new Meta();
-        meta.setName(name);
-        meta.setDescription(description);
-
-        // 3. 模型参数的信息(这里是MainTemplate的挖坑参数)
-//        Meta.ModelConfigDTO.ModelDTO modelDTO = new Meta.ModelConfigDTO.ModelDTO();
-//        modelDTO.setFieldName("output");
-//        modelDTO.setType("String");
-//        modelDTO.setDefaultValue("Sum: ");
-
-        // 模型参数信息（第二次）
-        Meta.ModelConfigDTO.ModelDTO modelDTO = new Meta.ModelConfigDTO.ModelDTO();
-        modelDTO.setFieldName("className");
-        modelDTO.setType("String");
-
-        String projectPath = System.getProperty("user.dir");
-        String originalProjectPath = new File(projectPath).getParent() + File.separator + "samples/springboot-init";
-
-//        String searchStr = "Sum: ";
-
-        // 替换变量（第二次）
-        String searchStr = "BaseResponse";
-
-        String inputFilePath1 = "src/main/java/com/yupi/springbootinit/common";  // 因为方法中有了sourcePath，文件路径只需要相对路径
-        String inputFilePath2 = "src/main/resources/application.yml";
-
-        // 模型参数配置
-        TemplateMakerModelConfig templateMakerModelConfig = new TemplateMakerModelConfig();
-
-        // 模型组配置
-        TemplateMakerModelConfig.ModelGroupConfig modelGroupConfig = new TemplateMakerModelConfig.ModelGroupConfig();
-        modelGroupConfig.setGroupKey("mysql");
-        modelGroupConfig.setGroupName("数据库配置");
-        templateMakerModelConfig.setModelGroupConfig(modelGroupConfig);
-
-        // 模型配置
-        TemplateMakerModelConfig.ModelInfoConfig modelInfoConfig1 = new TemplateMakerModelConfig.ModelInfoConfig();
-        modelInfoConfig1.setFieldName("url");
-        modelInfoConfig1.setType("String");
-        modelInfoConfig1.setDefaultValue("jdbc:mysql://localhost:3306/my_db");
-        modelInfoConfig1.setReplaceText("jdbc:mysql://localhost:3306/my_db");
-
-        TemplateMakerModelConfig.ModelInfoConfig modelInfoConfig2 = new TemplateMakerModelConfig.ModelInfoConfig();
-        modelInfoConfig2.setFieldName("username");
-        modelInfoConfig2.setType("String");
-        modelInfoConfig2.setDefaultValue("root");
-        modelInfoConfig2.setReplaceText("root");
-
-        List<TemplateMakerModelConfig.ModelInfoConfig> modelInfoConfigList = Arrays.asList(modelInfoConfig1, modelInfoConfig2);
-        templateMakerModelConfig.setModels(modelInfoConfigList);
-
-        // 文件过滤
-        // 只处理 common 包下文件名称包含 Base 的文件和 controller 包下的文件。
-        TemplateMakerFileConfig templateMakerFileConfig = new TemplateMakerFileConfig();
-        TemplateMakerFileConfig.FileInfoConfig fileInfoConfig1 = new TemplateMakerFileConfig.FileInfoConfig();
-        fileInfoConfig1.setPath(inputFilePath1);
-        List<FileFilterConfig> fileFilterConfigList = new ArrayList<>();
-        FileFilterConfig fileFilterConfig = FileFilterConfig.builder()
-                .range(FileFilterRangeEnum.FILE_NAME.getValue())
-                .rule(FileFilterRuleEnum.CONTAINS.getValue())
-                .value("Base")
-                .build();
-        fileFilterConfigList.add(fileFilterConfig);
-        fileInfoConfig1.setFilterConfigList(fileFilterConfigList);
-
-        // 分组配置
-        // 分组1
-        TemplateMakerFileConfig.FileGroupConfig fileGroupConfig = new TemplateMakerFileConfig.FileGroupConfig();
-        fileGroupConfig.setCondition("output输出");
-        fileGroupConfig.setGroupName("testGroup2");
-        fileGroupConfig.setGroupKey("测试分组");
-        templateMakerFileConfig.setFileGroupConfig(fileGroupConfig);
-        // 分组2
-        TemplateMakerFileConfig.FileInfoConfig fileInfoConfig2 = new TemplateMakerFileConfig.FileInfoConfig();
-        fileInfoConfig2.setPath(inputFilePath2);
-        templateMakerFileConfig.setFiles(Arrays.asList(fileInfoConfig1, fileInfoConfig2));
-
-        long l = makeTemplate(meta, templateMakerModelConfig, originalProjectPath, templateMakerFileConfig, searchStr, 1750752428187742208l);
-        System.out.println(l);
-    }
 
 }
